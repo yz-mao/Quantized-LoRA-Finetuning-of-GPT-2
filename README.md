@@ -15,7 +15,7 @@ This repository explores the performance of the GPT-2 model under multiple varia
 
 - Cyclic Precision Training [(CPT: Efficient Deep Neural Network Training via Cyclic Precision)](https://arxiv.org/abs/2101.09868)
 
-- Adversarial Attacks for LLM [(Gradient-based Adversarial Attacks against Text Transformers)](Gradient-based Adversarial Attacks against Text Transformers)
+- Adversarial Attacks for LLM [(Gradient-based Adversarial Attacks against Text Transformers)](https://arxiv.org/abs/2104.13733)
 
 
 ## Implementation Guidance
