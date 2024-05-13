@@ -107,6 +107,10 @@ python run_qa.py --model_name_or_path gpt2 \
 python eval_qa.py --model_name_or_path result \
 --dataset_name squad \
 --do_eval \
+--per_device_train_batch_size 16 \
+--per_device_eval_batch_size 16 \
+--seed 42 \
+--report_to tensorboard \
 --activate_lora_idx 1 1 1 1 1 1 1 1 1 1 1 1 0 \
 --output_dir ./evaluation/
 ```
