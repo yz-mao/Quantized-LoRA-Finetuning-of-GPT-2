@@ -21,12 +21,11 @@ This repository explores the performance of the GPT-2 model under multiple varia
 ## Implementation Guidance
 
 ### Prerequisites
-- See ***env.yml*** for the complete conda environment. Create a new conda environment:
+- Create a new conda environment:
 ```
 conda env create -f env.yml
-conda activate pytorch
+conda activate GPT2
 ```
-
 
 ### Attempt 1: Full finetuning of GPT-2 under static precision 
 1. Go to the project directory for static precision training:
