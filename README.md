@@ -21,12 +21,11 @@ This repository explores the performance of the GPT-2 model under multiple varia
 ## Implementation Guidance
 
 ### Prerequisites
-- See ***env.yml*** for the complete conda environment. Create a new conda environment:
+- Create a new conda environment:
 ```
 conda env create -f env.yml
-conda activate pytorch
+conda activate GPT2
 ```
-
 
 ### Attempt 1: Full finetuning of GPT-2 under static precision 
 1. Go to the project directory for static precision training:
@@ -52,9 +51,9 @@ python run_qa.py --model_name_or_path gpt2 \
 --max_seq_length 384 \
 --doc_stride 128 \
 --max_steps 1000 \
---w_bits 4 \
---a_bits 4 \
---kv_bits 4 \
+--w_bits 8 \
+--a_bits 8 \
+--kv_bits 8 \
 --output_dir ./results
 ```
 
@@ -64,7 +63,7 @@ The layers to be quantized when running this code include:
 - The output projection in each attention block (quantized by **w_bits**)
 - The two linear layers in each MLP module (quantized by **w_bits**)
 - The final linear layer (quantized by **w_bits**)
-- The inputs for these above layers (quantized by **a_bits**)
+- The inputs for these layers above (quantized by **a_bits**)
 
 
 ### Attempt 2: LoRA finetuning of GPT-2 under switchable precision 
@@ -73,7 +72,7 @@ The layers to be quantized when running this code include:
 cd switchable_precision
 ```
 
-2. Run ***run_qa.py***. This example code fine-tunes GPT-2 on the SQuAD1.0 datas with 2 LoRA modules (2 pairs of LoRA adapters with rank 16) per layer, one of which quantized by 32 bits per value and the other quantized by 8 bits per value: 
+2. Run ***run_qa.py***. This example code fine-tunes GPT-2 on the SQuAD 1.0 dataset with 2 LoRA modules (2 pairs of LoRA adapters with rank 16) per layer, one of which is quantized by 16 bits per value and the other is quantized by 8 bits per value: 
 ```
 python run_qa.py --model_name_or_path gpt2 \
 --dataset_name squad \
@@ -92,25 +91,30 @@ python run_qa.py --model_name_or_path gpt2 \
 --doc_stride 128 \
 --save_safetensors False \
 --max_steps 1000 \
---w_bits 32 6 \
---a_bits 32 6 \
---kv_bits 32 6 \
+--w_bits 16 8 \
+--a_bits 16 8 \
+--kv_bits 16 8 \
 --lora_attn_dim 16 \
 --lora_attn_alpha 8 \
 --lora_dropout 0.0 \
 --lora_num_per_layer 2 \
---output_dir ./result 
+--output_dir ./results_16_8 
 ```
 
-3. Run ***eval_qa.py*** to flexibly switch precision configurations during inference. This example code activates the 32 bit-width configuration for LoRA Modules applied to the final classification layer, and activates 8 bit-width configuration for LoRA modules applied to the 12 attention blocks in GPT-2:
+3. Run ***eval_qa.py*** to flexibly switch precision configurations during inference. This example code activates the 16-bit width configuration for LoRA Modules applied to the final classification layer and the 8-bit width configuration for LoRA modules applied to each of the 12 attention blocks in GPT-2:
 ```
-python eval_qa.py --model_name_or_path result \
+python eval_qa.py --model_name_or_path results_16_8 \
 --dataset_name squad \
 --do_eval \
+--per_device_train_batch_size 16 \
+--per_device_eval_batch_size 16 \
+--seed 42 \
+--report_to tensorboard \
 --activate_lora_idx 1 1 1 1 1 1 1 1 1 1 1 1 0 \
 --output_dir ./evaluation/
 ```
-The **--activate_lora_idx** decides which LoRA module to be activated for the 13 layers (12 attention layers + 1 output linear layer). In this example, LoRA module with index 0 refers to the one with 32 bit-width configuration as we input **--w_bits 32 6** for training.
+The **--activate_lora_idx** parameter determines which LoRA module to activate for the 13 layers (12 attention layers + 1 output linear layer). In this example, the LoRA module with index 0 refers to the one with a 16-bit width configuration, as indicated by the **--w_bits 16 8** input during training.
+
 
 ### Attempt 3: LoRA finetuning of GPT-2 under cyclic precision 
 1. Go to the project directory for cyclic precision LoRA training:
@@ -118,9 +122,9 @@ The **--activate_lora_idx** decides which LoRA module to be activated for the 13
 cd cyclic_precision
 ```
 
-2. Run ***run_qa.py***. This example code enables cyclic precision for all the modules to be quantized in Step 1:
+2. Run ***run_qa.py***. This example code enables cyclic precision for all the modules to be quantized in Attempt 1:
 ```
-run_qa.py --model_name_or_path gpt2 \
+python run_qa.py --model_name_or_path gpt2 \
 --dataset_name squad \
 --do_train \
 --do_eval \
@@ -155,12 +159,32 @@ With **--num_cyclic_period 32**, **--num_bit_min 16** and **--num_bit_max 32**, 
 cd adversarial_attack
 ```
 
-2. Run ***attack.py***. This example code generates adversarial samples by GPT-2 model with LoRA modules quantized by 16 bit-width configurations, and then attacks its 6 bit-width LoRA alternative modules:
+2. Run ***attack.py***. This example code generates adversarial samples using a GPT-2 model with LoRA modules quantized to 16-bit width configurations, and then attacks its alternative LoRA modules quantized to 8-bit width:
 ```
-cd adversarial_attack
+python attack.py --model_name_or_path results_16_8 \
+--dataset_name squad \
+--do_train
+--do_eval
+--per_device_train_batch_size 16
+--per_device_eval_batch_size 16
+--seed 42
+--learning_rate 3e-03
+--logging_strategy steps
+--logging_steps 10
+--lr_scheduler_type linear
+--report_to tensorboard
+--gradient_accumulation_steps 1
+--max_seq_length 384
+--doc_stride 128
+--max_steps 10
+--attack_lora_idx 0
+--eval_lora_idx 1
+--adversarial_generation_step 10
+--adversarial_sample_num 100
+--output_dir ./attack_results
 ```
 
-The output of this command is the test accuracy achieved by LoRA modules under the 6 bit-with configuration after the attack. This step aims to evaluate the transferability of adversarial attacks across different bit-width configurations. 
+The output of this command is the test accuracy achieved by LoRA modules under the 8 bit-with configuration after the attack. This step aims to evaluate the transferability of adversarial attacks across different bit-width configurations. 
 
 
 ## Results
